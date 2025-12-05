@@ -5,6 +5,7 @@ import { getChatIdFromUrl, isSharePage } from './page'
 import { Menu } from './ui/Menu'
 import { onloadSafe } from './utils/utils'
 import { sendOnce } from './automation/input'
+import { injectAutomationPanel } from './automation/panel'
 
 import './i18n'
 import './styles/missing-tailwind.css'
@@ -95,6 +96,8 @@ function main() {
         })
 
         injectAutoSendTestButton()
+        // === v5.2: 注入控制面板 ===
+        injectAutomationPanel()
     })
 }
 

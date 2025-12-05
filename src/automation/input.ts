@@ -1,5 +1,6 @@
 import { INPUT_SELECTORS, SEND_BUTTON_SELECTORS } from './selectors'
 
+// === v1.0: 基础输入定位 ===
 // 找输入框根节点（#prompt-textarea 或 fallback）
 function getInputRoot(): HTMLElement | null {
   const byRoot = document.querySelector(INPUT_SELECTORS.root)
@@ -19,11 +20,11 @@ function getInputParagraph(): HTMLElement | null {
 }
 
 // 写入 prompt 文本
-export function fillPrompt(prompt: string): void {
+export function fillPrompt(prompt: string): boolean {
   const root = getInputRoot()
   if (!root) {
     console.warn('[auto-chat] 找不到输入框 root')
-    return
+    return false
   }
 
   const paragraph = getInputParagraph()
@@ -45,6 +46,7 @@ export function fillPrompt(prompt: string): void {
   // 触发 input 事件，让 React/前端框架知道内容变了
   const evt = new Event('input', { bubbles: true })
   root.dispatchEvent(evt)
+  return true
 }
 
 // 找发送按钮
@@ -59,17 +61,20 @@ function getSendButton(): HTMLButtonElement | null {
 }
 
 // 点击发送
-export function triggerSend(): void {
+export function triggerSend(): boolean {
   const btn = getSendButton()
   if (!btn) {
     console.warn('[auto-chat] 找不到发送按钮')
-    return
+    return false
   }
   btn.click()
+  return true
 }
 
 // 对外暴露一个“发一次消息”的函数
-export function sendOnce(prompt: string): void {
-  fillPrompt(prompt)
-  triggerSend()
+// === v1.1: 公开 sendOnce ===
+export function sendOnce(prompt: string): boolean {
+  const filled = fillPrompt(prompt)
+  const sent = filled ? triggerSend() : false
+  return Boolean(filled && sent)
 }
