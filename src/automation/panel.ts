@@ -1,15 +1,19 @@
 import {
   clearQueue,
   enqueueMessage,
-  getAutomationConfig,
   getQueueSnapshot,
   processQueueManually,
   setAutoSendEnabled,
+} from './automation'
+import {
+  getPluginConfig,
+  setAutoForwardReply,
   setDelayRange,
   setMaxRetries,
-} from './automation'
+} from '../agent/config'
+import { getPersonaId, setPersonaId } from '../agent/identity'
 
-// === v5.1: 控制面板 UI ===
+// === v6.6: 控制面板 UI 与配置 ===
 export function injectAutomationPanel() {
   const existing = document.getElementById('auto-send-control-panel')
   if (existing) return
@@ -76,6 +80,42 @@ export function injectAutomationPanel() {
   autoSendToggle.append(autoSendCheckbox, document.createTextNode('Auto send queue'))
   panel.appendChild(autoSendToggle)
 
+  const autoForwardToggle = document.createElement('label')
+  autoForwardToggle.style.display = 'flex'
+  autoForwardToggle.style.alignItems = 'center'
+  autoForwardToggle.style.gap = '6px'
+  const autoForwardCheckbox = document.createElement('input')
+  autoForwardCheckbox.type = 'checkbox'
+  autoForwardCheckbox.onchange = () => {
+    setAutoForwardReply(autoForwardCheckbox.checked)
+  }
+  autoForwardToggle.append(autoForwardCheckbox, document.createTextNode('Auto forward replies'))
+  panel.appendChild(autoForwardToggle)
+
+  const personaWrapper = document.createElement('div')
+  personaWrapper.style.display = 'flex'
+  personaWrapper.style.flexDirection = 'column'
+  personaWrapper.style.gap = '4px'
+
+  const personaLabel = document.createElement('label')
+  personaLabel.textContent = 'Persona ID'
+  personaLabel.style.fontSize = '11px'
+
+  const personaInput = document.createElement('input')
+  personaInput.type = 'text'
+  personaInput.style.width = '100%'
+  personaInput.style.padding = '6px'
+  personaInput.style.borderRadius = '6px'
+  personaInput.style.border = '1px solid #374151'
+  personaInput.style.background = '#111827'
+  personaInput.style.color = '#f9fafb'
+  personaInput.onchange = () => {
+    setPersonaId(personaInput.value.trim() || 'default')
+    personaInput.value = getPersonaId()
+  }
+  personaWrapper.append(personaLabel, personaInput)
+  panel.appendChild(personaWrapper)
+
   const delayRow = document.createElement('div')
   delayRow.style.display = 'flex'
   delayRow.style.justifyContent = 'space-between'
@@ -139,11 +179,15 @@ export function injectAutomationPanel() {
   }
 
   function syncUIFromConfig() {
-    const current = getAutomationConfig()
+    const current = getPluginConfig()
     autoSendCheckbox.checked = current.autoSendEnabled
+    autoForwardCheckbox.checked = current.autoForwardReply
+
     minDelayInput.input.value = String(current.minDelayMs)
     maxDelayInput.input.value = String(current.maxDelayMs)
     retryInput.input.value = String(current.maxRetries)
+
+    personaInput.value = getPersonaId()
   }
 
   function updateQueueLabel() {

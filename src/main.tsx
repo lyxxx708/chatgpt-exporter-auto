@@ -4,8 +4,17 @@ import { fetchConversation, processConversation } from './api'
 import { getChatIdFromUrl, isSharePage } from './page'
 import { Menu } from './ui/Menu'
 import { onloadSafe } from './utils/utils'
-import { sendOnce } from './automation/input'
 import { injectAutomationPanel } from './automation/panel'
+import { enqueueMessage, enqueueTask } from './automation/automation'
+import {
+  getPluginConfig,
+  setAutoForwardReply,
+  setAutoSendEnabled,
+  setDelayRange,
+  setMaxRetries,
+} from './agent/config'
+import { getInstanceId, getPersonaId, setPersonaId } from './agent/identity'
+import type { AgentReply, AgentTask, PluginConfig } from './agent/types'
 
 import './i18n'
 import './styles/missing-tailwind.css'
@@ -95,9 +104,7 @@ function main() {
             })
         })
 
-        injectAutoSendTestButton()
-        // === v5.2: 注入控制面板 ===
-        injectAutomationPanel()
+        bootstrapAutomation()
     })
 }
 
@@ -129,8 +136,58 @@ function injectAutoSendTestButton() {
     btn.style.fontSize = '14px'
 
     btn.onclick = () => {
-        sendOnce('这是自动发送的测试消息（来自自动化脚本）')
+        enqueueMessage('这是自动发送的测试消息（来自自动化脚本）')
     }
 
     document.body.appendChild(btn)
+}
+
+function bootstrapAutomation() {
+    injectAutoSendTestButton()
+    injectAutomationPanel()
+    exposeGlobalAutoAgent()
+}
+
+function exposeGlobalAutoAgent() {
+    const instanceId = getInstanceId()
+
+    const api = {
+        instanceId,
+        get personaId() {
+            return getPersonaId()
+        },
+        set personaId(value: string) {
+            setPersonaId(value)
+        },
+        getConfig: () => getPluginConfig(),
+        setConfig: (partial: Partial<PluginConfig>) => {
+            const current = getPluginConfig()
+            if (typeof partial.minDelayMs === 'number' || typeof partial.maxDelayMs === 'number') {
+                const min = partial.minDelayMs ?? current.minDelayMs
+                const max = partial.maxDelayMs ?? current.maxDelayMs
+                setDelayRange(min, max)
+            }
+            if (typeof partial.maxRetries === 'number') {
+                setMaxRetries(partial.maxRetries)
+            }
+            if (typeof partial.autoSendEnabled === 'boolean') {
+                setAutoSendEnabled(partial.autoSendEnabled)
+            }
+            if (typeof partial.autoForwardReply === 'boolean') {
+                setAutoForwardReply(partial.autoForwardReply)
+            }
+        },
+        pushTask: (task: AgentTask) => {
+            if (!task.personaId) {
+                task.personaId = getPersonaId()
+            }
+            enqueueTask(task)
+        },
+        pushText: (prompt: string) => {
+            enqueueMessage(prompt)
+        },
+        onReply: undefined as ((reply: AgentReply) => void) | undefined,
+    }
+
+    window.AutoAgent = api
 }

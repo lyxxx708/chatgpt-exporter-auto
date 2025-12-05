@@ -1,42 +1,24 @@
 import { sendOnce } from './input'
+import type { AgentReply, AgentTask } from '../agent/types'
+import {
+  getPluginConfig,
+  setAutoSendEnabled as setAutoSendEnabledConfig,
+} from '../agent/config'
+import { getInstanceId, getPersonaId } from '../agent/identity'
+import { transport } from '../agent/transport'
+import { waitForNextReply } from '../agent/replyWatcher'
 
-// === v2.0: 消息队列与配置 ===
-export type AutomationConfig = {
-  minDelayMs: number
-  maxDelayMs: number
-  maxRetries: number
-  autoSendEnabled: boolean
-}
-
-const config: AutomationConfig = {
-  minDelayMs: 1500,
-  maxDelayMs: 3000,
-  maxRetries: 2,
-  autoSendEnabled: false,
-}
-
-const messageQueue: string[] = []
+// === v6.5: 任务队列与调度 ===
+const taskQueue: AgentTask[] = []
 let isProcessing = false
 let nextTimer: number | null = null
 
-export function getAutomationConfig(): AutomationConfig {
-  return { ...config }
-}
-
-export function setDelayRange(minDelayMs: number, maxDelayMs: number) {
-  // === v5.0: UI 可配置延迟 ===
-  config.minDelayMs = Math.max(0, Math.min(minDelayMs, maxDelayMs))
-  config.maxDelayMs = Math.max(config.minDelayMs, maxDelayMs)
-}
-
-export function setMaxRetries(maxRetries: number) {
-  // === v5.0: UI 可配置重试次数 ===
-  config.maxRetries = Math.max(0, Math.floor(maxRetries))
+export function getQueueSnapshot(): AgentTask[] {
+  return [...taskQueue]
 }
 
 export function setAutoSendEnabled(enabled: boolean) {
-  // === v5.0: 自动发送开关 ===
-  config.autoSendEnabled = enabled
+  setAutoSendEnabledConfig(enabled)
   if (enabled) {
     scheduleNext()
   }
@@ -47,71 +29,55 @@ export function setAutoSendEnabled(enabled: boolean) {
 }
 
 export function enqueueMessage(text: string) {
-  // === v2.1: 入队接口 ===
-  messageQueue.push(text)
-  if (config.autoSendEnabled) {
+  enqueueTask({
+    taskId: 'local_' + Date.now() + '_' + Math.random().toString(16).slice(2),
+    personaId: getPersonaId(),
+    prompt: text,
+  })
+}
+
+export function enqueueTask(task: AgentTask) {
+  taskQueue.push(task)
+  const cfg = getPluginConfig()
+  const shouldAutoSend = typeof task.autoSend === 'boolean' ? task.autoSend : cfg.autoSendEnabled
+  if (shouldAutoSend) {
     scheduleNext()
   }
 }
 
 export function clearQueue() {
-  // === v2.2: 队列清空 ===
-  messageQueue.length = 0
+  taskQueue.length = 0
 }
 
-export function getQueueSnapshot() {
-  return [...messageQueue]
+export function processQueueManually() {
+  if (isProcessing) return
+  scheduleNext()
 }
 
 function clearNextTimer() {
-  if (nextTimer) {
+  if (nextTimer !== null) {
     clearTimeout(nextTimer)
     nextTimer = null
   }
 }
 
-function scheduleNext(delayMs = 0) {
-  // === v4.0: setTimeout 链式调度 ===
-  if (nextTimer !== null || isProcessing) return
-  nextTimer = window.setTimeout(() => {
-    nextTimer = null
-    processNextInQueue()
-  }, delayMs)
-}
-
 function getRandomDelay(): number {
-  // === v4.1: 随机延迟 ===
-  const { minDelayMs, maxDelayMs } = config
+  const { minDelayMs, maxDelayMs } = getPluginConfig()
   const range = Math.max(0, maxDelayMs - minDelayMs)
   return minDelayMs + Math.random() * range
 }
 
-async function processNextInQueue() {
-  // === v2.3: 队列调度 ===
-  if (!config.autoSendEnabled) {
-    isProcessing = false
-    return
-  }
-
-  const next = messageQueue.shift()
-  if (!next) {
-    isProcessing = false
-    return
-  }
-
-  isProcessing = true
-
-  await sendWithRetry(next)
-
-  isProcessing = false
-  if (config.autoSendEnabled && messageQueue.length > 0) {
-    scheduleNext(getRandomDelay())
-  }
+function scheduleNext(delayMs = 0) {
+  if (nextTimer !== null || isProcessing) return
+  nextTimer = window.setTimeout(() => {
+    nextTimer = null
+    void processNextTask()
+  }, delayMs)
 }
 
 export async function sendWithRetry(message: string): Promise<void> {
-  // === v3.0: 重试封装 ===
-  const maxAttempts = Math.max(1, config.maxRetries + 1)
+  const cfg = getPluginConfig()
+  const maxAttempts = Math.max(1, cfg.maxRetries + 1)
   let attempt = 0
 
   return new Promise((resolve) => {
@@ -132,9 +98,51 @@ export async function sendWithRetry(message: string): Promise<void> {
   })
 }
 
-// === v2.4: 手动触发处理（供 UI 调用） ===
-export function processQueueManually() {
-  if (!config.autoSendEnabled) return
+async function processNextTask() {
+  const cfg = getPluginConfig()
   if (isProcessing) return
-  scheduleNext()
+
+  const task = taskQueue.shift()
+  if (!task) {
+    isProcessing = false
+    return
+  }
+
+  const shouldProcess = typeof task.autoSend === 'boolean' ? task.autoSend : cfg.autoSendEnabled
+  if (!shouldProcess) {
+    isProcessing = false
+    return
+  }
+
+  isProcessing = true
+
+  await sendWithRetry(task.prompt)
+
+  const answerText = await waitForNextReply({ timeoutMs: 120000 })
+
+  const shouldForward = typeof task.autoForwardReply === 'boolean'
+    ? task.autoForwardReply
+    : cfg.autoForwardReply
+
+  if (shouldForward && answerText) {
+    const reply: AgentReply = {
+      taskId: task.taskId,
+      personaId: task.personaId,
+      instanceId: getInstanceId(),
+      answerText,
+      timestamp: Date.now(),
+    }
+
+    await transport.sendReply(reply)
+    if (window.AutoAgent && typeof window.AutoAgent.onReply === 'function') {
+      window.AutoAgent.onReply(reply)
+    }
+  }
+
+  isProcessing = false
+
+  const nextDelay = getRandomDelay()
+  if (taskQueue.length > 0 && cfg.autoSendEnabled) {
+    scheduleNext(nextDelay)
+  }
 }
