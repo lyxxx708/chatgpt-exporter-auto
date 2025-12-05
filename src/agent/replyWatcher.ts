@@ -16,12 +16,14 @@ export function waitForNextReply(options: WaitOptions): Promise<string | null> {
       return
     }
 
+    let observer: MutationObserver | null = null
+
     const timer = window.setTimeout(() => {
-      observer.disconnect()
+      if (observer) observer.disconnect()
       resolve(null)
     }, timeoutMs)
 
-    const observer = new MutationObserver(() => {
+    observer = new MutationObserver(() => {
       const latest = findLatestAssistantMessage()
       if (!latest) return
 
@@ -32,7 +34,7 @@ export function waitForNextReply(options: WaitOptions): Promise<string | null> {
       lastSeenMessageKey = key
       const text = latest.innerText
       window.clearTimeout(timer)
-      observer.disconnect()
+      if (observer) observer.disconnect()
       resolve(text)
     })
 
@@ -40,6 +42,19 @@ export function waitForNextReply(options: WaitOptions): Promise<string | null> {
       childList: true,
       subtree: true,
     })
+
+    // === v6.4.3: 首次检查，避免遗漏已经存在的回复 ===
+    const initialLatest = findLatestAssistantMessage()
+    if (initialLatest) {
+      const initialKey =
+        initialLatest.getAttribute('data-message-id') || initialLatest.innerText.slice(0, 32)
+      if (initialKey !== lastSeenMessageKey) {
+        lastSeenMessageKey = initialKey
+        window.clearTimeout(timer)
+        if (observer) observer.disconnect()
+        resolve(initialLatest.innerText)
+      }
+    }
   })
 }
 
