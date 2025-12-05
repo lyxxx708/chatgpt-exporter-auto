@@ -4,6 +4,7 @@ import { fetchConversation, processConversation } from './api'
 import { getChatIdFromUrl, isSharePage } from './page'
 import { Menu } from './ui/Menu'
 import { onloadSafe } from './utils/utils'
+import { sendOnce } from './automation/input'
 
 import './i18n'
 import './styles/missing-tailwind.css'
@@ -92,6 +93,8 @@ function main() {
                 thread.append(timestamp)
             })
         })
+
+        injectAutoSendTestButton()
     })
 }
 
@@ -101,4 +104,30 @@ function getMenuContainer() {
     container.style.zIndex = '99'
     render(<Menu container={container} />, container)
     return container
+}
+
+function injectAutoSendTestButton() {
+    const existing = document.getElementById('auto-send-test-button')
+    if (existing) return
+
+    const btn = document.createElement('button')
+    btn.id = 'auto-send-test-button'
+    btn.textContent = 'Auto Send Test'
+    btn.style.position = 'fixed'
+    btn.style.bottom = '20px'
+    btn.style.right = '20px'
+    btn.style.zIndex = '9999'
+    btn.style.padding = '8px 12px'
+    btn.style.background = '#10a37f'
+    btn.style.color = '#fff'
+    btn.style.borderRadius = '6px'
+    btn.style.border = 'none'
+    btn.style.cursor = 'pointer'
+    btn.style.fontSize = '14px'
+
+    btn.onclick = () => {
+        sendOnce('这是自动发送的测试消息（来自自动化脚本）')
+    }
+
+    document.body.appendChild(btn)
 }
