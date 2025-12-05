@@ -172,6 +172,10 @@ export function injectAutomationPanel() {
     window.clearInterval(labelInterval)
   })
 
+  window.addEventListener('beforeunload', () => {
+    window.clearInterval(labelInterval)
+  })
+
   function syncDelayInputs(minInput: HTMLInputElement, maxInput: HTMLInputElement) {
     const min = Number(minInput.value)
     const max = Number(maxInput.value)

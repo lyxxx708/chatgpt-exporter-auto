@@ -110,6 +110,7 @@ async function processNextTask() {
 
   const shouldProcess = typeof task.autoSend === 'boolean' ? task.autoSend : cfg.autoSendEnabled
   if (!shouldProcess) {
+    taskQueue.unshift(task)
     isProcessing = false
     return
   }

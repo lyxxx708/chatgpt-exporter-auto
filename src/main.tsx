@@ -5,11 +5,10 @@ import { getChatIdFromUrl, isSharePage } from './page'
 import { Menu } from './ui/Menu'
 import { onloadSafe } from './utils/utils'
 import { injectAutomationPanel } from './automation/panel'
-import { enqueueMessage, enqueueTask } from './automation/automation'
+import { enqueueMessage, enqueueTask, setAutoSendEnabled } from './automation/automation'
 import {
   getPluginConfig,
   setAutoForwardReply,
-  setAutoSendEnabled,
   setDelayRange,
   setMaxRetries,
 } from './agent/config'
