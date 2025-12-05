@@ -12,6 +12,8 @@ import {
   setMaxRetries,
 } from '../agent/config'
 import { getPersonaId, setPersonaId } from '../agent/identity'
+import { getStoredPersonaRole, setStoredPersonaRole } from '../orchestrator/roles'
+import type { PersonaRole } from '../orchestrator/types'
 
 // === v6.6: 控制面板 UI 与配置 ===
 export function injectAutomationPanel() {
@@ -135,6 +137,73 @@ export function injectAutomationPanel() {
   }
   panel.appendChild(retryInput.wrapper)
 
+  const roleWrapper = document.createElement('div')
+  roleWrapper.style.display = 'flex'
+  roleWrapper.style.flexDirection = 'column'
+  roleWrapper.style.gap = '4px'
+
+  const roleLabel = document.createElement('label')
+  roleLabel.textContent = 'QCP Persona Role'
+  roleLabel.style.fontSize = '11px'
+
+  const roleSelect = document.createElement('select')
+  roleSelect.style.width = '100%'
+  roleSelect.style.padding = '6px'
+  roleSelect.style.borderRadius = '6px'
+  roleSelect.style.border = '1px solid #374151'
+  roleSelect.style.background = '#111827'
+  roleSelect.style.color = '#f9fafb'
+
+  const roles: { label: string; value: string }[] = [
+    { label: 'None', value: 'None' },
+    { label: 'Coordinator', value: 'Coordinator' },
+    { label: 'Maximizer', value: 'Maximizer' },
+    { label: 'Minimizer', value: 'Minimizer' },
+    { label: 'Synthesizer', value: 'Synthesizer' },
+    { label: 'Judge', value: 'Judge' },
+  ]
+
+  roles.forEach((item) => {
+    const option = document.createElement('option')
+    option.value = item.value
+    option.textContent = item.label
+    roleSelect.appendChild(option)
+  })
+
+  roleSelect.onchange = () => {
+    setStoredPersonaRole(roleSelect.value as PersonaRole)
+    roleSelect.value = getStoredPersonaRole()
+    refreshQcpControls()
+  }
+
+  roleWrapper.append(roleLabel, roleSelect)
+  panel.appendChild(roleWrapper)
+
+  const qcpControls = document.createElement('div')
+  qcpControls.style.display = 'flex'
+  qcpControls.style.gap = '8px'
+
+  const startQcpBtn = document.createElement('button')
+  startQcpBtn.textContent = 'Start QCP Hunter'
+  applyButtonStyle(startQcpBtn)
+  startQcpBtn.onclick = () => {
+    if (roleSelect.value === 'Coordinator') {
+      (window as any).qcpOrchestrator?.start()
+    }
+  }
+
+  const stopQcpBtn = document.createElement('button')
+  stopQcpBtn.textContent = 'Stop QCP Hunter'
+  applyButtonStyle(stopQcpBtn, '#374151')
+  stopQcpBtn.onclick = () => {
+    if (roleSelect.value === 'Coordinator') {
+      (window as any).qcpOrchestrator?.stop()
+    }
+  }
+
+  qcpControls.append(startQcpBtn, stopQcpBtn)
+  panel.appendChild(qcpControls)
+
   const queueLabel = document.createElement('div')
   queueLabel.id = 'auto-send-queue-label'
   queueLabel.textContent = 'Queue: 0'
@@ -192,10 +261,16 @@ export function injectAutomationPanel() {
     retryInput.input.value = String(current.maxRetries)
 
     personaInput.value = getPersonaId()
+    roleSelect.value = getStoredPersonaRole()
+    refreshQcpControls()
   }
 
   function updateQueueLabel() {
     queueLabel.textContent = `Queue: ${getQueueSnapshot().length}`
+  }
+
+  function refreshQcpControls() {
+    qcpControls.style.display = roleSelect.value === 'Coordinator' ? 'flex' : 'none'
   }
 }
 

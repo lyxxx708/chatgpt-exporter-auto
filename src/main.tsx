@@ -14,6 +14,10 @@ import {
 } from './agent/config'
 import { getInstanceId, getPersonaId, setPersonaId } from './agent/identity'
 import type { AgentReply, AgentTask, PluginConfig } from './agent/types'
+import { PersonaWorker } from './orchestrator/personaWorker'
+import { QcpOrchestrator } from './orchestrator/qcpOrchestrator'
+import { getStoredPersonaRole, onPersonaRoleChange } from './orchestrator/roles'
+import type { PersonaRole } from './orchestrator/types'
 
 import './i18n'
 import './styles/missing-tailwind.css'
@@ -142,9 +146,10 @@ function injectAutoSendTestButton() {
 }
 
 function bootstrapAutomation() {
-    injectAutoSendTestButton()
-    injectAutomationPanel()
-    exposeGlobalAutoAgent()
+  injectAutoSendTestButton()
+  injectAutomationPanel()
+  initPersonaSystems()
+  exposeGlobalAutoAgent()
 }
 
 function exposeGlobalAutoAgent() {
@@ -189,4 +194,35 @@ function exposeGlobalAutoAgent() {
     }
 
     window.AutoAgent = api
+}
+
+function initPersonaSystems() {
+    const role = getStoredPersonaRole()
+    let orchestrator: QcpOrchestrator | null = null
+
+    const worker = new PersonaWorker()
+
+    const ensureOrchestratorForRole = (nextRole: PersonaRole) => {
+        if (nextRole === 'Coordinator') {
+            if (!orchestrator) {
+                orchestrator = new QcpOrchestrator()
+                ;(window as any).qcpOrchestrator = orchestrator
+            }
+        }
+        else if (orchestrator) {
+            orchestrator.stop()
+            orchestrator = null
+            if ((window as any).qcpOrchestrator) {
+                delete (window as any).qcpOrchestrator
+            }
+        }
+    }
+
+    ensureOrchestratorForRole(role)
+
+    onPersonaRoleChange((nextRole) => {
+        ensureOrchestratorForRole(nextRole)
+    })
+
+    void worker
 }
