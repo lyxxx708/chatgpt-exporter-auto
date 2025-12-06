@@ -7,6 +7,7 @@ import { onloadSafe } from './utils/utils'
 import { sendOnce } from './automation/input'
 import { ChatgptUiWorker } from './worker/ChatgptUiWorker'
 import { renderWorkerPanel } from './worker/panel'
+import { enableCoordinatorMode } from './orchestrator/bootstrap'
 
 import './i18n'
 import './styles/missing-tailwind.css'
@@ -23,6 +24,7 @@ function main() {
 
         const worker = new ChatgptUiWorker()
         renderWorkerPanel(worker)
+        enableCoordinatorMode(worker)
 
         const injectNavMenu = (nav: HTMLElement) => {
             if (injectionMap.has(nav)) return

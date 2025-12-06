@@ -161,7 +161,10 @@ export class ChatgptUiWorker {
         return { reloadCount, fromReload, lastReloadAt }
     }
 
-    private handleCommand(command: CommandMessage) {
+    private handleCommand(command: CommandMessage & { targetWorkerId?: string }) {
+        if (command.targetWorkerId && command.targetWorkerId !== this.workerId) {
+            return
+        }
         switch (command.type) {
             case 'PING':
                 this.emitStatus()
