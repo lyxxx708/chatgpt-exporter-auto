@@ -21,6 +21,8 @@ export class CommandRouter {
     }
 
     dispose() {
+        this.pending.forEach(p => p.resolve({ ok: false, error: 'router_disposed' }))
+        this.pending.clear()
         this.channel.close()
     }
 

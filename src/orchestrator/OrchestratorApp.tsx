@@ -50,6 +50,14 @@ function OrchestratorApp({ engine }: Props) {
 
     const selectedTemplate = useMemo(() => engine.getTemplate(selectedTemplateId || ''), [engine, selectedTemplateId, state.templates])
 
+    const handleSelectTemplate = (id: string) => {
+        setSelectedTemplateId(id)
+        const tpl = engine.getTemplate(id)
+        if (tpl && (!state.currentRun || state.currentRun.templateId !== id)) {
+            engine.syncSlotsFromTemplate(tpl)
+        }
+    }
+
     const startRun = () => {
         if (selectedTemplateId) {
             engine.startRun(selectedTemplateId, initialArtifact)
@@ -83,7 +91,7 @@ function OrchestratorApp({ engine }: Props) {
                         templates={state.templates}
                         selectedTemplateId={selectedTemplateId}
                         template={selectedTemplate}
-                        onSelect={setSelectedTemplateId}
+                        onSelect={handleSelectTemplate}
                         onSave={tpl => engine.updateTemplate(tpl)}
                     />
                 </div>

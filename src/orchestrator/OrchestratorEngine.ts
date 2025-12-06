@@ -230,12 +230,20 @@ export class OrchestratorEngine {
     }
 
     syncSlotsFromTemplate(template: ScenarioTemplate) {
-        this.slots = template.roles.map(role => ({ slotName: role.slotName }))
+        const existing = this.slots
+        this.slots = template.roles.map(role => {
+            const prev = existing.find(s => s.slotName === role.slotName)
+            return prev ? { ...prev } : { slotName: role.slotName }
+        })
         this.router.setSlots(this.slots)
         this.notify()
     }
 
     startRun(templateId: string, initialArtifact = '', name?: string) {
+        const template = this.templates.find(t => t.id === templateId)
+        if (template) {
+            this.syncSlotsFromTemplate(template)
+        }
         const run = this.runtime.createRun(templateId, initialArtifact, name)
         this.activeRunId = run.runId
         this.runtimeUnsub?.()

@@ -161,7 +161,7 @@ export class ChatgptUiWorker {
         return { reloadCount, fromReload, lastReloadAt }
     }
 
-    private handleCommand(command: CommandMessage & { targetWorkerId?: string }) {
+    private handleCommand(command: CommandMessage) {
         if (command.targetWorkerId && command.targetWorkerId !== this.workerId) {
             return
         }

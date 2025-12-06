@@ -18,11 +18,11 @@ export interface WorkerConfig {
 }
 
 export type CommandMessage =
-    | { type: 'PING'; id: string }
-    | { type: 'RUN_PROMPT'; id: string; prompt: string; metadata?: any }
-    | { type: 'CANCEL'; id: string }
-    | { type: 'SET_CONFIG'; config: Partial<WorkerConfig> }
-    | { type: 'SET_PERSONA_LABEL'; label: string }
+    | { type: 'PING'; id: string; targetWorkerId?: string }
+    | { type: 'RUN_PROMPT'; id: string; prompt: string; metadata?: any; targetWorkerId?: string }
+    | { type: 'CANCEL'; id: string; targetWorkerId?: string }
+    | { type: 'SET_CONFIG'; config: Partial<WorkerConfig>; targetWorkerId?: string }
+    | { type: 'SET_PERSONA_LABEL'; label: string; targetWorkerId?: string }
 
 export type EventMessage =
     | {
