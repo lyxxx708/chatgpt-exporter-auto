@@ -244,6 +244,26 @@ Click the button to perform the action you want.
 - **Delete** - Deletes the selected conversations.
 - **Export** - Exports the selected conversations in the format chosen using the format selector.
 
+## 🛠 Local build & Tampermonkey install
+
+For local development or manual installation:
+
+1. Install dependencies with `pnpm install` (or `npm install`).
+2. Build the userscript via `pnpm run build` to produce `dist/chatgpt.user.js`.
+3. In Tampermonkey, create/import a script from the generated file. Do not remove the `@require` lines for `jszip` and `html2canvas`.
+4. Ensure the script is enabled and matches `https://chatgpt.com/*` or `https://chat.openai.com/*` pages.
+
+When the script loads, the browser console shows messages like:
+
+- `[ChatGPT Exporter] Userscript initializing on ...`
+- `[ChatGPT Exporter] Worker bootstrap complete ...`
+
+If the UI does not appear, check that:
+
+- Tampermonkey reports the script as active on the current domain.
+- The console has no red errors such as missing `JSZip`/`html2canvas` (reinstall if so).
+- Reloading the page after build/install clears old cached versions.
+
 ## 🤝 Contribution
 
 See [CONTRIBUTING.md](./CONTRIBUTING.md)

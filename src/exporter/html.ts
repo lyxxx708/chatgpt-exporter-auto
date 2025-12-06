@@ -1,4 +1,3 @@
-import JSZip from 'jszip'
 import { fetchConversation, getCurrentChatId, processConversation } from '../api'
 import { KEY_TIMESTAMP_24H, KEY_TIMESTAMP_ENABLED, KEY_TIMESTAMP_HTML, baseUrl } from '../constants'
 import i18n from '../i18n'
@@ -9,6 +8,7 @@ import { fromMarkdown, toHtml } from '../utils/markdown'
 import { ScriptStorage } from '../utils/storage'
 import { standardizeLineBreaks } from '../utils/text'
 import { dateStr, getColorScheme, timestamp, unixTimestampToISOString } from '../utils/utils'
+import { getJSZip } from '../utils/deps'
 import type { ApiConversationWithId, ConversationNodeMessage, ConversationResult } from '../api'
 import type { ExportMeta } from '../ui/SettingContext'
 
@@ -34,7 +34,13 @@ export async function exportToHtml(fileNameFormat: string, metaList: ExportMeta[
 export async function exportAllToHtml(fileNameFormat: string, apiConversations: ApiConversationWithId[], metaList?: ExportMeta[]) {
     const userAvatar = await getUserAvatar()
 
-    const zip = new JSZip()
+    const JSZipCtor = getJSZip()
+    if (!JSZipCtor) {
+        alert('JSZip is not available. Please reinstall the userscript to restore the jszip @require header.')
+        return false
+    }
+
+    const zip = new JSZipCtor()
     const filenameMap = new Map<string, number>()
     const conversations = apiConversations.map(x => processConversation(x))
     conversations.forEach((conversation) => {

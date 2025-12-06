@@ -1,9 +1,9 @@
-import JSZip from 'jszip'
 import { fetchConversation, getCurrentChatId, processConversation } from '../api'
 import i18n from '../i18n'
 import { checkIfConversationStarted } from '../page'
 import { convertToOoba, convertToTavern } from '../utils/conversion'
 import { downloadFile, getFileNameWithFormat } from '../utils/download'
+import { getJSZip } from '../utils/deps'
 import type { ApiConversationWithId } from '../api'
 
 export async function exportToJson(fileNameFormat: string) {
@@ -68,7 +68,13 @@ export async function exportAllToOfficialJson(_fileNameFormat: string, apiConver
 }
 
 export async function exportAllToJson(fileNameFormat: string, apiConversations: ApiConversationWithId[]) {
-    const zip = new JSZip()
+    const JSZipCtor = getJSZip()
+    if (!JSZipCtor) {
+        alert('JSZip is not available. Please reinstall the userscript to restore the jszip @require header.')
+        return false
+    }
+
+    const zip = new JSZipCtor()
     const filenameMap = new Map<string, number>()
     const conversations = apiConversations.map(x => ({
         conversation: processConversation(x),

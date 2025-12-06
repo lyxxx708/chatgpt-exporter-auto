@@ -1,9 +1,9 @@
-import html2canvas from 'html2canvas'
 import i18n from '../i18n'
 import { checkIfConversationStarted, getChatIdFromUrl } from '../page'
 import { downloadUrl, getFileNameWithFormat } from '../utils/download'
 import { Effect } from '../utils/effect'
 import { sleep } from '../utils/utils'
+import { getHtml2Canvas } from '../utils/deps'
 
 // https://github.com/niklasvh/html2canvas/issues/2792#issuecomment-1042948572
 function fnIgnoreElements(el: any) {
@@ -13,6 +13,12 @@ function fnIgnoreElements(el: any) {
 export async function exportToPng(fileNameFormat: string) {
     if (!checkIfConversationStarted()) {
         alert(i18n.t('Please start a conversation first'))
+        return false
+    }
+
+    const html2canvasFn = getHtml2Canvas()
+    if (!html2canvasFn) {
+        alert('html2canvas is not available. Please reinstall the userscript to restore the html2canvas @require header.')
         return false
     }
 
@@ -84,7 +90,7 @@ export async function exportToPng(fileNameFormat: string) {
 
         let canvas: HTMLCanvasElement | null = null
         try {
-            canvas = await html2canvas(threadEl, {
+            canvas = await html2canvasFn(threadEl, {
                 scale,
                 useCORS: true,
                 scrollX: -window.scrollX,
