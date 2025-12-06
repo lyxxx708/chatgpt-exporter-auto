@@ -5,6 +5,8 @@ import { getChatIdFromUrl, isSharePage } from './page'
 import { Menu } from './ui/Menu'
 import { onloadSafe } from './utils/utils'
 import { sendOnce } from './automation/input'
+import { ChatgptUiWorker } from './worker/ChatgptUiWorker'
+import { renderWorkerPanel } from './worker/panel'
 
 import './i18n'
 import './styles/missing-tailwind.css'
@@ -18,6 +20,9 @@ function main() {
         document.head.append(styleEl)
 
         const injectionMap = new Map<HTMLElement, HTMLElement>()
+
+        const worker = new ChatgptUiWorker()
+        renderWorkerPanel(worker)
 
         const injectNavMenu = (nav: HTMLElement) => {
             if (injectionMap.has(nav)) return
