@@ -244,6 +244,22 @@ Click the button to perform the action you want.
 - **Delete** - Deletes the selected conversations.
 - **Export** - Exports the selected conversations in the format chosen using the format selector.
 
+## 🛠 Local build & Tampermonkey debug
+
+If you are installing from a local build (including the L0/L1 automation helpers), follow these steps:
+
+1. Install dependencies and build the userscript:
+   - `pnpm install` (or `npm install`)
+   - `pnpm run build` (or `npm run build`)
+2. In Tampermonkey, install `dist/chatgpt.user.js` directly. The userscript header already includes `@require` entries for **JSZip** and **html2canvas**, so you should not need to edit it manually.
+3. Open `https://chatgpt.com/` or `https://chat.openai.com/` and check the DevTools console for messages starting with `[chatgpt-exporter]` to confirm initialization. You should also see the exporter button and the worker/orchestrator panels on the page.
+
+If the UI does not appear:
+
+- Confirm the script is enabled in Tampermonkey and the active tab URL matches one of the `@match` patterns in the userscript header (both chatgpt.com and chat.openai.com are covered).
+- Look for red console errors such as missing globals; the build-included `@require` lines should provide JSZip/html2canvas. Rebuild the userscript if the header was edited.
+- Reload the page after enabling the script to ensure the onload hooks run.
+
 ## 🤝 Contribution
 
 See [CONTRIBUTING.md](./CONTRIBUTING.md)

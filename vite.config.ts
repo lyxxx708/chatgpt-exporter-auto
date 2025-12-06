@@ -31,6 +31,12 @@ export default defineConfig({
                 },
                 'license': packageJson.license,
                 'match': [
+                    // broad matches first to avoid missing new paths or query params
+                    'https://chat.openai.com/*',
+                    'https://chatgpt.com/*',
+                    'https://new.oaifree.com/*',
+
+                    // explicit legacy paths remain for clarity and compatibility with existing installs
                     'https://chat.openai.com/',
                     // support https://chat.openai.com/?model={model}
                     'https://chat.openai.com/?model=*',

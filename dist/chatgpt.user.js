@@ -10,6 +10,9 @@
 // @description:zh-TW  輕鬆匯出 ChatGPT 聊天紀錄，以便進一步分析或分享。
 // @license            MIT
 // @icon               https://chat.openai.com/favicon.ico
+// @match              https://chat.openai.com/*
+// @match              https://chatgpt.com/*
+// @match              https://new.oaifree.com/*
 // @match              https://chat.openai.com/
 // @match              https://chat.openai.com/?model=*
 // @match              https://chat.openai.com/c/*
