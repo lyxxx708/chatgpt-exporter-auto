@@ -1,18 +1,29 @@
 import { INPUT_SELECTORS, SEND_BUTTON_SELECTORS } from './selectors'
 
-function getInputRoot(): HTMLElement | null {
-    const byRoot = document.querySelector(INPUT_SELECTORS.root)
-    if (byRoot) return byRoot as HTMLElement
+function safeQuerySelector<T extends Element>(selector?: string | null): T | null {
+    if (!selector) return null
+    try {
+        return document.querySelector<T>(selector)
+    }
+    catch (err) {
+        console.warn('[auto-chat] invalid selector', selector, err)
+        return null
+    }
+}
 
-    const byFallback = document.querySelector(INPUT_SELECTORS.fallbackContainer)
-    if (byFallback) return byFallback as HTMLElement
+function getInputRoot(): HTMLElement | null {
+    const byRoot = safeQuerySelector<HTMLElement>(INPUT_SELECTORS.root)
+    if (byRoot) return byRoot
+
+    const byFallback = safeQuerySelector<HTMLElement>(INPUT_SELECTORS.fallbackContainer)
+    if (byFallback) return byFallback
 
     return null
 }
 
 function getInputParagraph(): HTMLElement | null {
-    const el = document.querySelector(INPUT_SELECTORS.paragraph)
-    if (el) return el as HTMLElement
+    const el = safeQuerySelector<HTMLElement>(INPUT_SELECTORS.paragraph)
+    if (el) return el
     return null
 }
 
@@ -42,12 +53,11 @@ export function fillPrompt(prompt: string): void {
 }
 
 function getSendButton(): HTMLButtonElement | null {
-    const primary = document.querySelector(SEND_BUTTON_SELECTORS.primary)
-    if (primary) return primary as HTMLButtonElement
-
-    const fallback = document.querySelector(SEND_BUTTON_SELECTORS.fallbackContainer)
-    if (fallback) return fallback as HTMLButtonElement
-
+    for (const selector of SEND_BUTTON_SELECTORS.candidates) {
+        const el = safeQuerySelector<HTMLButtonElement>(selector)
+        if (el) return el
+    }
+    console.error('[auto-chat] send button not found with known selectors')
     return null
 }
 

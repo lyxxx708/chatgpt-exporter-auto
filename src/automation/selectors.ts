@@ -7,18 +7,18 @@ export const INPUT_SELECTORS = {
     paragraph: '#prompt-textarea > p',
 
     // Fallback container if root changes
-    fallbackContainer:
-        '#thread-bottom > div > div > div.pointer-events-auto.relative.z-1.flex.h-\\[var\\(--composer-container-height,100%\\)\\].max-w-full.flex-\\[var\\(--composer-container-flex,1\\)\\].flex-col > form > div:nth-child(2) > div',
+    fallbackContainer: '#prompt-textarea',
 }
 
 // Send button selectors
 export const SEND_BUTTON_SELECTORS = {
-    // Primary selector
-    primary: '#composer-submit-button',
-
-    // Fallback container selector
-    fallbackContainer:
-        '#thread-bottom > div > div > div.pointer-events-auto.relative.z-1.flex.h-\\[var\\(--composer-container-height,100%\\)\\].max-w-full.flex-\\[var\\(--composer-container-flex,1\\)\\].flex-col > form > div:nth-child(2) > div > div.flex.items-center.gap-2.\\[grid-area\\:trailing\\] > div',
+    // Candidate selectors are tried in order, with try/catch to avoid SyntaxError crashes.
+    candidates: [
+        'button[data-testid="send-button"]',
+        '#composer-submit-button',
+        'button[aria-label*="Send message"]',
+        'button[aria-label*="发送"]',
+    ],
 }
 
 // More button selectors for future extension
