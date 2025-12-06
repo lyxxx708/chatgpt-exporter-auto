@@ -6,6 +6,7 @@ import type {
     ArtifactStage,
     LoopStage,
     PromptStage,
+    RoundSummary,
     ScenarioEvent,
     ScenarioRun,
     ScenarioRunStatus,
@@ -33,18 +34,20 @@ export class ScenarioRuntime {
         return Array.from(this.templates.values())
     }
 
-    createRun(templateId: string, initialArtifact = '') {
+    createRun(templateId: string, initialArtifact = '', name?: string) {
         const runId = `run_${Date.now().toString(36)}`
         const run: ScenarioRun = {
             runId,
             templateId,
             createdAt: Date.now(),
+            name,
             status: 'idle',
             currentStagePath: [],
             currentRound: 1,
             lastReplies: {},
             centralArtifact: initialArtifact,
             events: [],
+            rounds: [],
         }
         this.runs.set(runId, run)
         return run
@@ -178,9 +181,10 @@ export class ScenarioRuntime {
             return { ok: false, error: `No worker bound for slot ${slotName}` }
         }
         const taskId = `${run.runId}-${slotName}-${Date.now().toString(36)}`
+        const assignedAt = Date.now()
         this.pushEvent(run, {
             type: 'TASK_ASSIGNED',
-            time: Date.now(),
+            time: assignedAt,
             slot: slotName,
             workerId: bound,
             taskId,
@@ -188,16 +192,51 @@ export class ScenarioRuntime {
         })
         this.notify(run)
         const res = await this.router.runPromptOnSlot(run.runId, slotName, prompt, { runId: run.runId, slotName })
+        const completedAt = Date.now()
         this.pushEvent(run, {
             type: 'TASK_RESULT',
-            time: Date.now(),
+            time: completedAt,
             slot: slotName,
             workerId: bound,
             taskId,
             ok: res.ok,
+            payload: res.reply ? res.reply.slice(0, 280) : res.error,
         })
         this.notify(run)
+        this.updateRoundSummary(run, {
+            round: run.currentRound,
+            slotName,
+            reply: res.reply || '',
+            ok: res.ok,
+            durationMs: completedAt - assignedAt,
+        })
         return res
+    }
+
+    private updateRoundSummary(
+        run: ScenarioRun,
+        payload: { round: number; slotName: string; reply: string; ok: boolean; durationMs?: number },
+    ) {
+        const existing = run.rounds.find(r => r.round === payload.round)
+        const roleEntry = {
+            role: payload.slotName,
+            shortLabel: payload.slotName,
+            fullReply: payload.reply,
+            ok: payload.ok,
+            durationMs: payload.durationMs,
+        }
+        if (existing) {
+            const without = existing.roleReplies.filter(r => r.role !== payload.slotName)
+            existing.roleReplies = [...without, roleEntry]
+        }
+        else {
+            const summary: RoundSummary = {
+                round: payload.round,
+                roleReplies: [roleEntry],
+            }
+            run.rounds.push(summary)
+        }
+        run.rounds.sort((a, b) => a.round - b.round)
     }
 
     private evaluateCondition(expr: string, run: ScenarioRun) {
@@ -236,7 +275,8 @@ export class ScenarioRuntime {
     }
 
     private pushEvent(run: ScenarioRun, event: ScenarioEvent) {
-        run.events.push(event)
+        const eventWithId = event.id ? event : { ...event, id: `${event.type}-${Date.now().toString(36)}-${run.events.length}` }
+        run.events.push(eventWithId)
     }
 
     private notify(run: ScenarioRun) {

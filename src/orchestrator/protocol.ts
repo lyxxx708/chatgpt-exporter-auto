@@ -24,6 +24,11 @@ export type ScenarioTemplate = {
         defaultSystemPrompt: string
     }>
     stages: ScenarioStage[]
+    hooks?: {
+        beforeRound?: string
+        afterRound?: string
+        shouldStop?: string
+    }
 }
 
 export type ScenarioStage = LoopStage | PromptStage | AggregateStage | ArtifactStage
@@ -63,20 +68,34 @@ export type ScenarioRun = {
     runId: string
     templateId: string
     createdAt: number
+    name?: string
     status: ScenarioRunStatus
     currentStagePath: string[]
     currentRound: number
     lastReplies: Record<string, string>
     centralArtifact: string
     events: ScenarioEvent[]
+    rounds: RoundSummary[]
 }
 
 export type ScenarioEvent =
-    | { type: 'TASK_ASSIGNED'; time: number; slot: string; workerId: string; taskId: string; promptPreview: string }
-    | { type: 'TASK_RESULT'; time: number; slot: string; workerId: string; taskId: string; ok: boolean }
-    | { type: 'ARTIFACT_UPDATED'; time: number; diffPreview: string }
-    | { type: 'RUN_STATUS'; time: number; from: ScenarioRunStatus; to: ScenarioRunStatus }
-    | { type: 'RUN_ERROR'; time: number; message: string }
+    | { type: 'TASK_ASSIGNED'; id?: string; time: number; slot: string; workerId: string; taskId: string; promptPreview: string }
+    | { type: 'TASK_RESULT'; id?: string; time: number; slot: string; workerId: string; taskId: string; ok: boolean; payload?: any }
+    | { type: 'ARTIFACT_UPDATED'; id?: string; time: number; diffPreview: string }
+    | { type: 'RUN_STATUS'; id?: string; time: number; from: ScenarioRunStatus; to: ScenarioRunStatus }
+    | { type: 'RUN_ERROR'; id?: string; time: number; message: string }
+
+export type RoundSummary = {
+    round: number
+    roleReplies: Array<{
+        role: string
+        shortLabel: string
+        fullReply: string
+        summary?: string
+        durationMs?: number
+        ok: boolean
+    }>
+}
 
 export interface PersistedTemplatePayload {
     templates: ScenarioTemplate[]

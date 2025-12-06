@@ -33,6 +33,11 @@ export class CommandRouter {
         return () => this.listeners.delete(cb)
     }
 
+    sendPing(workerId: string) {
+        const payload: CommandMessage = { type: 'PING', id: `ping-${Date.now().toString(36)}` }
+        this.sendCommand(workerId, payload)
+    }
+
     sendCommand(workerId: string, command: CommandMessage) {
         this.channel.postMessage({ ...command, targetWorkerId: workerId })
     }

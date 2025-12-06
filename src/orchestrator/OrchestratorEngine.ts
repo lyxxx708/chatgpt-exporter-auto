@@ -2,8 +2,56 @@ import { ArtifactManager } from './ArtifactManager'
 import { CommandRouter } from './CommandRouter'
 import { ScenarioRuntime } from './ScenarioRuntime'
 import { WorkerRegistry } from './WorkerRegistry'
-import { loadTemplates, saveTemplates } from './persistence'
-import type { ScenarioRun, ScenarioTemplate, WorkerSlot } from './protocol'
+import { loadRunSummaries, loadTemplates, saveTemplates } from './persistence'
+import type {
+    RoundSummary,
+    ScenarioEvent,
+    ScenarioRun,
+    ScenarioTemplate,
+    ScenarioRunStatus,
+    WorkerSlot,
+} from './protocol'
+
+export type WorkerInfoView = {
+    workerId: string
+    personaLabel: string
+    slotName?: string
+    status: 'idle' | 'busy' | 'cooldown' | 'error'
+    queueLength: number
+    lastSeenAt: number
+    currentTaskId?: string
+    errorMessage?: string
+}
+
+export type ScenarioTemplateSummary = {
+    id: string
+    name: string
+    description?: string
+    roles: string[]
+    maxRounds: number
+}
+
+export type RunStateView = {
+    id: string
+    name?: string
+    templateId: string
+    status: ScenarioRunStatus
+    currentRound: number
+    maxRounds: number
+    currentStagePath: string[]
+    centralArtifact: string
+    rounds: RoundSummary[]
+    events: ScenarioEvent[]
+}
+
+export type OrchestratorViewState = {
+    currentRun: RunStateView | null
+    runsHistory: { runId: string; templateId: string; status: ScenarioRunStatus; createdAt: number; artifactPreview: string }[]
+    templates: ScenarioTemplateSummary[]
+    workers: WorkerInfoView[]
+    events: ScenarioEvent[]
+    slots: WorkerSlot[]
+}
 
 const DEFAULT_TEMPLATES: ScenarioTemplate[] = [
     {
@@ -78,6 +126,9 @@ const DEFAULT_TEMPLATES: ScenarioTemplate[] = [
                 ],
             },
         ],
+        hooks: {
+            shouldStop: 'false',
+        },
     },
 ]
 
@@ -89,25 +140,29 @@ export class OrchestratorEngine {
 
     private slots: WorkerSlot[] = []
     private templates: ScenarioTemplate[]
-    private listeners = new Set<() => void>()
+    private listeners = new Set<(state: OrchestratorViewState) => void>()
     private activeRunId?: string
-    private runListeners = new Set<(run?: ScenarioRun) => void>()
     private runtimeUnsub?: () => void
+    private runListeners = new Set<(run?: ScenarioRun) => void>()
+    private runsHistory = loadRunSummaries()
 
     constructor() {
         const stored = loadTemplates()
-        this.templates = stored || DEFAULT_TEMPLATES
+        this.templates = stored && stored.length > 0 ? stored : DEFAULT_TEMPLATES
         this.runtime.loadTemplates(this.templates)
         this.syncSlotsFromTemplate(this.templates[0])
+        this.registry.onWorkersChanged(() => this.notify())
     }
 
     dispose() {
         this.registry.dispose()
         this.router.dispose()
+        this.runtimeUnsub?.()
     }
 
-    subscribe(cb: () => void) {
+    subscribe(cb: (state: OrchestratorViewState) => void) {
         this.listeners.add(cb)
+        cb(this.getState())
         return () => this.listeners.delete(cb)
     }
 
@@ -116,27 +171,46 @@ export class OrchestratorEngine {
         return () => this.runListeners.delete(cb)
     }
 
-    getSnapshot() {
+    getState(): OrchestratorViewState {
+        const workersRaw = this.registry.getWorkers()
+        const workerViews: WorkerInfoView[] = workersRaw.map(info => ({
+            workerId: info.workerId,
+            personaLabel: info.personaLabel,
+            status: info.status,
+            queueLength: info.queueLength,
+            lastSeenAt: info.lastSeenAt,
+            errorMessage: info.errorCode,
+            slotName: this.slots.find(s => s.boundWorkerId === info.workerId)?.slotName,
+        }))
+
+        const currentRun = this.getActiveRun()
+        const templateSummaries: ScenarioTemplateSummary[] = this.templates.map(t => ({
+            id: t.id,
+            name: t.name,
+            description: t.description,
+            roles: t.roles.map(r => r.slotName),
+            maxRounds: this.deriveMaxRounds(t),
+        }))
+
         return {
+            currentRun: currentRun ? this.toRunView(currentRun) : null,
+            runsHistory: this.runsHistory,
+            templates: templateSummaries,
+            workers: workerViews,
+            events: currentRun?.events || [],
             slots: this.slots,
-            workers: this.registry.getWorkers(),
-            templates: this.templates,
-            activeRun: this.activeRunId ? this.runtime.getRun(this.activeRunId) : undefined,
         }
     }
 
-    setBoundWorker(slotName: string, workerId?: string) {
-        this.slots = this.slots.map(slot => (slot.slotName === slotName ? { ...slot, boundWorkerId: workerId } : slot))
-        this.router.setSlots(this.slots)
-        this.notify()
+    listTemplates() {
+        return this.templates
     }
 
-    syncSlotsFromTemplate(template: ScenarioTemplate) {
-        this.slots = template.roles.map(role => ({ slotName: role.slotName }))
-        this.router.setSlots(this.slots)
+    getTemplate(id: string) {
+        return this.templates.find(t => t.id === id)
     }
 
-    addOrUpdateTemplate(template: ScenarioTemplate) {
+    updateTemplate(template: ScenarioTemplate) {
         const exists = this.templates.findIndex(t => t.id === template.id)
         if (exists >= 0) {
             this.templates[exists] = template
@@ -149,14 +223,33 @@ export class OrchestratorEngine {
         this.notify()
     }
 
-    startRun(templateId: string, initialArtifact = '') {
-        const run = this.runtime.createRun(templateId, initialArtifact)
+    setBoundWorker(slotName: string, workerId?: string) {
+        this.slots = this.slots.map(slot => (slot.slotName === slotName ? { ...slot, boundWorkerId: workerId || undefined } : slot))
+        this.router.setSlots(this.slots)
+        this.notify()
+    }
+
+    syncSlotsFromTemplate(template: ScenarioTemplate) {
+        this.slots = template.roles.map(role => ({ slotName: role.slotName }))
+        this.router.setSlots(this.slots)
+        this.notify()
+    }
+
+    startRun(templateId: string, initialArtifact = '', name?: string) {
+        const run = this.runtime.createRun(templateId, initialArtifact, name)
         this.activeRunId = run.runId
         this.runtimeUnsub?.()
-        this.runtimeUnsub = this.runtime.onRunUpdated(run.runId, r => this.runListeners.forEach(cb => cb(r)))
+        this.runtimeUnsub = this.runtime.onRunUpdated(run.runId, r => this.handleRunUpdated(r))
         this.runListeners.forEach(cb => cb(run))
         this.runtime.startRun(run.runId)
         this.notify()
+    }
+
+    resumeRun() {
+        if (this.activeRunId) {
+            this.runtime.startRun(this.activeRunId)
+            this.notify()
+        }
     }
 
     pauseRun() {
@@ -169,11 +262,60 @@ export class OrchestratorEngine {
         this.notify()
     }
 
+    step() {
+        // Placeholder for future fine-grained stepping
+        this.resumeRun()
+    }
+
+    setRunName(name: string) {
+        if (!this.activeRunId) return
+        const run = this.runtime.getRun(this.activeRunId)
+        if (run) {
+            run.name = name
+            this.notify()
+        }
+    }
+
     getActiveRun(): ScenarioRun | undefined {
         return this.activeRunId ? this.runtime.getRun(this.activeRunId) : undefined
     }
 
+    bindSlot(slotName: string, workerId: string | null) {
+        this.setBoundWorker(slotName, workerId || undefined)
+    }
+
+    private handleRunUpdated(run?: ScenarioRun) {
+        if (!run) return
+        this.runListeners.forEach(cb => cb(run))
+        if (run.status === 'completed' || run.status === 'error') {
+            this.runsHistory = loadRunSummaries()
+        }
+        this.notify()
+    }
+
+    private deriveMaxRounds(template: ScenarioTemplate): number {
+        const loop = template.stages.find(stage => stage.kind === 'loop') as { maxRounds: number } | undefined
+        return loop?.maxRounds || 1
+    }
+
+    private toRunView(run: ScenarioRun): RunStateView {
+        const template = this.templates.find(t => t.id === run.templateId)
+        return {
+            id: run.runId,
+            name: run.name || template?.name,
+            templateId: run.templateId,
+            status: run.status,
+            currentRound: run.currentRound,
+            maxRounds: template ? this.deriveMaxRounds(template) : 0,
+            currentStagePath: run.currentStagePath,
+            centralArtifact: run.centralArtifact,
+            rounds: run.rounds || [],
+            events: run.events || [],
+        }
+    }
+
     private notify() {
-        this.listeners.forEach(cb => cb())
+        const snapshot = this.getState()
+        this.listeners.forEach(cb => cb(snapshot))
     }
 }
